@@ -1,6 +1,6 @@
 {
   "name": "ogplayer-react-native-demos",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "scripts": {
     "android": "react-native run-android",
@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@react-native/new-app-screen": "0.87.0",
-    "ogplayer-react-native": "^1.0.1",
+    "ogplayer-react-native": "^1.0.2",
     "react": "19.2.3",
     "react-native": "0.87.0",
     "react-native-safe-area-context": "^5.9.1"
