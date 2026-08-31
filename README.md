@@ -42,7 +42,7 @@ need too:
 - The vertical feed is a portrait surface: it keeps the screen portrait
   while on screen.
 
-Docs: https://ogplayer.tv/docs · Live web demo: https://ogplayer.tv
+Docs: https://ogplayer.tv/docs · Live web demo: https://demo.ogplayer.tv
 
 ## Notes
 
