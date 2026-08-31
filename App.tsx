@@ -22,8 +22,10 @@ import {
   View,
 } from 'react-native';
 import {
+  OGDownloads,
   OGVerticalFeedView,
   OGPlayerView,
+  type OGDownload,
   type OGPlayerViewRef,
   type OGMediaItem,
   type OGUIConfig,
@@ -372,6 +374,41 @@ function CustomActionsDemo() {
   );
 }
 
+// ── PLAYBACK · Picture-in-picture ────────────────────────────────────────
+function PipDemo() {
+  const log = useLog();
+  const events = playerEvents(log);
+  const player = useRef<OGPlayerViewRef>(null);
+  const [autoEnter, setAutoEnter] = useState(true);
+  return (
+    <Screen
+      player={
+        <OGPlayerView
+          ref={player}
+          style={s.fill}
+          source={{ url: TOS, title: 'Picture-in-picture', posterUrl: TOS_POSTER }}
+          autoplay
+          pipEnabled
+          autoEnterPipOnBackground={autoEnter}
+          {...events}
+          onPipChanged={(active) => log.add(`pipChanged: isActive=${active}`)}
+        />
+      }
+    >
+      <View style={[s.checkIconRow, { paddingHorizontal: 8, gap: 14 }]}>
+        <CheckBox checked={autoEnter} onChange={setAutoEnter} />
+        <Text style={s.checkLabel}>Auto-enter on leave</Text>
+      </View>
+      <Text style={s.caption}>
+        No PiP button anywhere — the developer decides. Press Home while
+        playing and PiP enters automatically. The chrome is stripped in
+        the little window and every transition is logged below.
+      </Text>
+      <EventLog lines={log.lines} />
+    </Screen>
+  );
+}
+
 // ── PLAYBACK · Starts in fullscreen ──────────────────────────────────────
 function StartFullscreenDemo({ onClose }: { onClose: () => void }) {
   return (
@@ -556,6 +593,180 @@ function DrmDemo() {
       <Text style={s.caption}>
         Watch for DrmKeysLoaded in the log; the token-header stream also logs
         each tokenProvider call.
+      </Text>
+      <EventLog lines={log.lines} />
+    </Screen>
+  );
+}
+
+// ── STREAMING · Offline downloads ────────────────────────────────────────
+function DownloadsDemo() {
+  const log = useLog();
+  const events = playerEvents(log);
+  const addLog = log.add;
+  const [drm, setDrm] = useState(false);
+  const [downloads, setDownloads] = useState<OGDownload[]>([]);
+  const [playSource, setPlaySource] = useState<OGMediaItem | null>(null);
+  const [gen, setGen] = useState(0);
+
+  // The same streams the DRM demo uses; the Axinom entitlement message
+  // carries allow_persistence, so its licence may be stored offline.
+  const item = useCallback(
+    (encrypted: boolean): OGMediaItem =>
+      encrypted
+        ? {
+            url: AX_MPD,
+            title: 'Multi-DRM (persistent licence)',
+            drm: {
+              widevine: { licenseUrl: AX_WV_LICENSE },
+              tokenHeaderName: 'X-AxDRM-Message',
+              tokenProvider: async ({ renewal }) => {
+                addLog(`tokenProvider called (renewal=${renewal})`);
+                return { 'X-AxDRM-Message': AXINOM_TOKEN };
+              },
+            },
+          }
+        : { url: TOS, title: 'Tears of Steel', posterUrl: TOS_POSTER },
+    [addLog]
+  );
+
+  // A COMPLETED download auto-loads into the player (paused) exactly once —
+  // the player's own play button is the demo's play control; Delete resets
+  // the latch. Offline pickup is keyed by URL, no special code.
+  const loadedUrlRef = useRef<string | null>(null);
+  const maybeLoadCompleted = useCallback(
+    (ds: OGDownload[]) => {
+      const done = ds.find((d) => d.state === 'COMPLETED');
+      if (!done) {
+        if (ds.length === 0) {
+          loadedUrlRef.current = null;
+          setPlaySource(null);
+        }
+        return;
+      }
+      if (loadedUrlRef.current === done.url) return;
+      loadedUrlRef.current = done.url;
+      addLog('— downloaded, loading into the player (plays offline) —');
+      setPlaySource(item(done.url === AX_MPD));
+      setGen((g) => g + 1);
+    },
+    [addLog, item]
+  );
+
+  const refresh = useCallback(() => {
+    OGDownloads.list()
+      .then((ds) => {
+        setDownloads(ds);
+        maybeLoadCompleted(ds);
+      })
+      .catch(() => {});
+  }, [maybeLoadCompleted]);
+
+  useEffect(() => {
+    refresh();
+    const sub = OGDownloads.addListener((e) => {
+      if (e.type === 'failed') {
+        addLog(`download failed: ${e.error.code} ${e.error.message}`);
+      } else {
+        addLog(
+          `download ${e.type}: ${e.download.state}` +
+            (e.download.progressPercent >= 0 ? ` · ${Math.round(e.download.progressPercent)}%` : '')
+        );
+      }
+      refresh();
+    });
+    return () => {
+      sub.remove();
+      // Demo hygiene: leaving the screen deletes the downloads (passing the
+      // DRM item on the Widevine row so the licence release authenticates).
+      // The SDK itself keeps downloads until told otherwise.
+      OGDownloads.list()
+        .then((ds) =>
+          ds.forEach((d) => OGDownloads.remove(d.url, d.url === AX_MPD ? item(true) : undefined))
+        )
+        .catch(() => {});
+    };
+  }, [addLog, item, refresh]);
+
+  const licLabel = (d: OGDownload) => {
+    const l = d.license;
+    if (!l) return '';
+    if (l.isExpired) return ' · licence expired';
+    if (l.expiresAtMs == null) return ' · licence: no expiry';
+    return ` · licence ${Math.max(0, Math.round((l.remainingMs ?? 0) / 3600000))}h left`;
+  };
+
+  return (
+    <Screen
+      player={
+        playSource ? (
+          <OGPlayerView
+            key={gen}
+            style={s.fill}
+            source={playSource}
+            autoplay={false}
+            autoFullscreenOnRotate
+            {...events}
+          />
+        ) : (
+          <View style={[s.fill, { alignItems: 'center', justifyContent: 'center' }]}>
+            <Text style={s.caption}>Download below — the finished download loads here.</Text>
+          </View>
+        )
+      }
+    >
+      {/* One download at a time: while anything is downloaded or in flight,
+          the stream chooser and Download chip give way to the download's own
+          row — Delete brings the choices back. A COMPLETED download
+          auto-loads into the player above, so its own play button is the
+          only play control (the row keeps just Delete). */}
+      {downloads.length === 0 && (
+        <>
+          <View style={s.chipRow}>
+            <Chip label="Clear (ToS)" active={!drm} onPress={() => setDrm(false)} />
+            <Chip label="Widevine" active={drm} onPress={() => setDrm(true)} />
+          </View>
+          <View style={s.chipRow}>
+            <Chip
+              label="Download"
+              onPress={() => {
+                addLog(`add: ${item(drm).title}`);
+                OGDownloads.add(item(drm), { maxVideoHeight: 720 }).then(refresh);
+              }}
+            />
+          </View>
+        </>
+      )}
+      {downloads.map((d) => (
+        <View key={d.url} style={s.dlRow}>
+          <Text style={s.dlText} numberOfLines={2}>
+            {d.title ?? d.url} · {d.state}
+            {d.progressPercent >= 0 ? ` · ${Math.round(d.progressPercent)}%` : ''}
+            {licLabel(d)}
+          </Text>
+          {(d.state === 'DOWNLOADING' || d.state === 'QUEUED') && (
+            <Chip label="Pause" onPress={() => { OGDownloads.pause(d.url); refresh(); }} />
+          )}
+          {(d.state === 'PAUSED' || d.state === 'FAILED') && (
+            <Chip label="Resume" onPress={() => { OGDownloads.resume(d.url); refresh(); }} />
+          )}
+          {d.state !== 'REMOVING' && (
+            <Chip
+              label="Delete"
+              // Pass the item for the DRM row so the Widevine licence release
+              // can authenticate (frees the server-side offline slot too).
+              onPress={() => {
+                OGDownloads.remove(d.url, d.url === item(true).url ? item(true) : undefined).then(refresh);
+              }}
+            />
+          )}
+        </View>
+      ))}
+      <Text style={s.caption}>
+        Download a stream, toggle airplane mode, press play on the player —
+        playback keeps going from local storage (same URL, automatic offline
+        pickup). The Widevine stream restores its stored persistent licence
+        without a token call.
       </Text>
       <EventLog lines={log.lines} />
     </Screen>
@@ -1108,6 +1319,7 @@ const GROUPS: Array<[string, Demo[]]> = [
       { title: 'Orientation & fullscreen', icon: 'og_l_screen_rotation', desc: 'Rotation, embedded ⇄ fullscreen, insets and cutouts.', Component: () => <OrientationDemo /> },
       { title: 'Controls on/off', icon: 'og_l_tune', desc: 'Default chrome, per-control hide, fully headless.', Component: () => <ControlsDemo /> },
       { title: 'Custom action icons', icon: 'og_l_add_circle_outline', desc: 'Up to 8 host icons inline in the controls, with callbacks.', Component: () => <CustomActionsDemo /> },
+      { title: 'Picture-in-picture', icon: 'og_l_pip', desc: 'Auto-enter on Home, dismiss pauses.', Component: () => <PipDemo /> },
       { title: 'Starts in fullscreen', icon: 'og_l_open_in_full', desc: 'Opens directly in fullscreen; host-intercepted exit.', Component: ({ onClose }) => <StartFullscreenDemo onClose={onClose} /> },
       { title: 'Playlist & up next', icon: 'og_l_playlist_play', desc: 'Queue clips that auto-advance, with a themeable countdown card.', Component: () => <PlaylistDemo /> },
       { title: 'Vertical feed', icon: 'og_l_swipe_vertical', desc: 'Swipeable portrait feed: preloaded neighbours, split layouts, sponsored items.', Component: () => <VerticalFeedDemo /> },
@@ -1119,6 +1331,7 @@ const GROUPS: Array<[string, Demo[]]> = [
     [
       { title: 'Live & DVR', icon: 'og_l_sensors', desc: 'Live edge, seekable window, behind-edge state.', Component: () => <LiveDemo /> },
       { title: 'DRM', icon: 'og_l_lock', desc: Platform.OS === 'android' ? 'Widevine licence acquisition and silent recovery.' : 'FairPlay key exchange (device only).', Component: () => <DrmDemo /> },
+      { title: 'Offline downloads', icon: 'og_demo_action_download', desc: 'Download, go offline, keep playing — persistent DRM licences included.', Component: () => <DownloadsDemo /> },
     ],
   ],
   ['TRACKS & DEVICES', [
@@ -1184,7 +1397,7 @@ function AppBody() {
             <Text style={s.brand}>
               <Text style={{ color: Ink.accent }}>OG</Text>Player
             </Text>
-            <Text style={s.version}>React Native · SDK {Platform.OS === 'ios' ? '1.0.4' : '1.0.3'}</Text>
+            <Text style={s.version}>React Native · SDK 1.1.0</Text>
           </View>
           <Text style={s.h1}>Integration demos</Text>
           <Text style={s.lede}>Every SDK capability, demonstrated end to end.</Text>
@@ -1286,12 +1499,15 @@ const s = StyleSheet.create({
   checkLabel: { color: Light.text, fontSize: 13, marginRight: 8 },
   watermarkBadge: { position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 8, paddingVertical: 4 },
   watermarkText: { color: '#FFF', fontSize: 12 },
-  hostErrorDim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(18,19,23,0.9)', alignItems: 'center', justifyContent: 'center' },
+  // RN 0.87 types dropped StyleSheet.absoluteFillObject — spell it out.
+  hostErrorDim: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(18,19,23,0.9)', alignItems: 'center', justifyContent: 'center' },
   hostErrorCard: { backgroundColor: '#1D1F24', borderRadius: 14, paddingHorizontal: 20, paddingVertical: 12, alignItems: 'center', margin: 12 },
   hostErrorTitle: { color: '#FFF', fontSize: 14, fontWeight: '700' },
   hostErrorBody: { color: 'rgba(255,255,255,0.7)', fontSize: 11.5, marginTop: 3, textAlign: 'center' },
   hostErrorButton: { backgroundColor: Ink.accent, borderRadius: 6, paddingHorizontal: 18, paddingVertical: 7, marginTop: 8 },
   hostErrorButtonText: { color: '#131313', fontWeight: '600', fontSize: 13 },
+  dlRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 4 },
+  dlText: { flex: 1, color: Light.text, fontSize: 12.5, lineHeight: 17 },
   errorForm: { paddingHorizontal: 12, paddingVertical: 8 },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   reloadButton: { backgroundColor: Ink.accent, borderRadius: 6, paddingHorizontal: 16, paddingVertical: 11 },
