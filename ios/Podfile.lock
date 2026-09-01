@@ -15,7 +15,7 @@ PODS:
   - hermes-engine (250829098.0.16):
     - hermes-engine/Pre-built (= 250829098.0.16)
   - hermes-engine/Pre-built (250829098.0.16)
-  - OgplayerReactNative (1.1.1):
+  - OgplayerReactNative (1.1.2):
     - GoogleAds-IMA-iOS-SDK (~> 3.32)
     - hermes-engine
     - RCTRequired
@@ -1982,7 +1982,7 @@ SPEC CHECKSUMS:
   glog: 3cf7cb46f743c4bc758ae3e6d9c15bd1b4cfd6d4
   GoogleAds-IMA-iOS-SDK: b1b1e3b8f486cfb7c7a669a58a5380421f3bcaab
   hermes-engine: 6a26e94b4a974cbadc751eed9caa12624c38f226
-  OgplayerReactNative: daf30f699804fe45f6b3d4f9d362aa6c13f1f981
+  OgplayerReactNative: 47b95e65dafb7b3c8209977d11e7a4b937782899
   RCT-Folly: 82921e585c0400eda46fac1068297aa9dfb035e4
   RCTDeprecation: 6d66040b74f4be203495adda55b49c1a25190291
   RCTRequired: ebf172e0b04196922ba4640458f9926c1bb34012

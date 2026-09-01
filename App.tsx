@@ -1397,7 +1397,7 @@ function AppBody() {
             <Text style={s.brand}>
               <Text style={{ color: Ink.accent }}>OG</Text>Player
             </Text>
-            <Text style={s.version}>React Native · SDK 1.1.0</Text>
+            <Text style={s.version}>React Native 1.1.2 · SDK 1.1.0/1.1.1</Text>
           </View>
           <Text style={s.h1}>Integration demos</Text>
           <Text style={s.lede}>Every SDK capability, demonstrated end to end.</Text>
