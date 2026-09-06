@@ -4165,10 +4165,10 @@ object.values@^1.1.6, object.values@^1.2.1:
     define-properties "^1.2.1"
     es-object-atoms "^1.0.0"
 
-ogplayer-react-native@^1.1.4:
-  version "1.1.4"
-  resolved "https://registry.npmjs.org/ogplayer-react-native/-/ogplayer-react-native-1.1.4.tgz"
-  integrity sha512-RPVttJlqxe0ZeKeBmicXs7P+z0UV9/rLuSBXF+qLYWD+F57QG5BrtCyTghc+lQNfPqIuADilWkoQgbHMz6Ifcw==
+ogplayer-react-native@^1.2.0:
+  version "1.2.0"
+  resolved "https://registry.npmjs.org/ogplayer-react-native/-/ogplayer-react-native-1.2.0.tgz"
+  integrity sha512-qS+sNMCdMTTqwdNDRkjLivUPCnQIp6pwbbiJGomDOBoH3gxXZK4aHU/redCqWjxB9N+4cj/p4K9AQcxaa7lD2g==
 
 on-finished@^2.4.1, on-finished@~2.4.1:
   version "2.4.1"
