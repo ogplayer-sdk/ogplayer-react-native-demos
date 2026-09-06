@@ -1,6 +1,6 @@
 {
   "name": "ogplayer-react-native-demos",
-  "version": "0.0.2",
+  "version": "1.2.0",
   "private": true,
   "scripts": {
     "android": "react-native run-android",
