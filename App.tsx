@@ -1,8 +1,9 @@
 /**
  * OGPlayer React Native — integration demos.
  * A faithful mirror of the native Android demo app: same screens, same
- * copy, same streams, dark surfaces throughout (native demo parity). Excluded from the RN wrapper v1 (and therefore from this app):
- * custom action icons, SDK overlay slots, FreeWheel, vertical feed.
+ * copy, same streams, dark surfaces throughout (native demo parity). The only
+ * native screen without an RN counterpart is FreeWheel (customer-licensed
+ * framework, native SDKs only).
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SafeAreaProvider, initialWindowMetrics, useSafeAreaInsets } from 'react-native-safe-area-context';
