@@ -60,6 +60,9 @@ const Light = {
 const TOS = 'https://media.ogplayer.tv/tos/master.m3u8';
 const TOS_POSTER = 'https://media.ogplayer.tv/posters/tos-mech.jpg';
 const TOS_STORYBOARD = 'https://media.ogplayer.tv/tos/storyboard/storyboard.vtt';
+const TOS_CLIP = 'https://media.ogplayer.tv/tos-clip-60s.mp4';
+// The header shows the installed wrapper's version, never a typed-in number.
+const WRAPPER_VERSION: string = require('ogplayer-react-native/package.json').version;
 const LIVE = 'https://demo.unified-streaming.com/k8s/live/stable/live.isml/.m3u8';
 const MULTI_AUDIO = 'https://media.axprod.net/TestVectors/Cmaf/clear_1080p_h264/manifest.m3u8';
 const MISSING_STREAM = 'https://media.ogplayer.tv/tos/does-not-exist.m3u8';
@@ -430,7 +433,7 @@ function StartFullscreenDemo({ onClose }: { onClose: () => void }) {
 // ── PLAYBACK · Custom error messages ─────────────────────────────────────
 const RETRY_MODES = ['SDK Retry', 'Custom label', 'No retry button', 'Branded style'];
 const RETRY_EXPLAINERS = [
-  'This screen loads a missing stream URL, so it always fails — your text (any language) replaces the SDK\u2019s default error overlay via errorMessages.',
+  'This screen loads a missing stream URL, so it always fails — your text (any language) replaces the SDK\u2019s default error overlay via errorMessages. Nothing plays here, so the seek, timeline, speed and track controls are hidden; play/pause, volume and fullscreen stay.',
   'retryButtonLabel: "Probeer opnieuw" — the SDK\u2019s Retry button, your text, any language.',
   'showRetryButton: false — the overlay shows only your message; recovery is your app\u2019s call (onError still fires).',
   'The error overlay is themeable: serif message and a blue serif Retry button via errorText*/retryButton* config — all SDK-drawn, so it follows fullscreen and rotation.',
@@ -443,6 +446,15 @@ function ErrorMessagesDemo() {
 
   const config: OGUIConfig = {
     showRetryButton: retryMode !== 2,
+    // The stream never loads: seeking, rate, tracks and the timeline have
+    // nothing to act on, so those controls are hidden.
+    showSeekButtons: false,
+    showProgressBar: false,
+    showTimeLabels: false,
+    showSpeedButton: false,
+    showQualityButton: false,
+    showAudioTrackButton: false,
+    showSubtitleButton: false,
     ...(retryMode === 1 ? { retryButtonLabel: 'Probeer opnieuw' } : {}),
     ...(retryMode === 3
       ? {
@@ -503,6 +515,15 @@ function ErrorMessagesDemo() {
 }
 
 // ── STREAMING · Live & DVR ───────────────────────────────────────────────
+// The stream carries one audio language and no text tracks — the two buttons
+// that would open an empty menu are hidden; playback rate has no meaning at
+// the live edge, so the speed button goes too.
+const LIVE_UI: OGUIConfig = {
+  showSubtitleButton: false,
+  showAudioTrackButton: false,
+  showSpeedButton: false,
+};
+
 function LiveDemo() {
   const log = useLog();
   const events = playerEvents(log);
@@ -519,6 +540,7 @@ function LiveDemo() {
             title: dvr ? 'Live DVR demo' : 'Live demo',
             streamType: dvr ? 'LIVE_DVR' : 'LIVE',
           }}
+          uiConfig={LIVE_UI}
           autoplay
           autoFullscreenOnRotate
           {...events}
@@ -532,7 +554,10 @@ function LiveDemo() {
       </View>
       <Text style={s.caption}>
         Scrub behind the DVR edge and watch onLiveEdgeChanged flip in the log;
-        tap the LIVE chip in the player to jump back.
+        tap the LIVE chip in the player to jump back. One audio language and
+        no subtitles: the subtitle and audio buttons are hidden
+        (showSubtitleButton / showAudioTrackButton = false); speed goes too —
+        no rate changes at the live edge (showSpeedButton = false).
       </Text>
       <EventLog lines={log.lines} />
     </Screen>
@@ -568,12 +593,18 @@ function DrmDemo() {
     },
   };
   const iosOnlyToken = Platform.OS !== 'android';
+  // The open Widevine asset has one audio track and no text tracks; the
+  // Axinom vector has three of each. Buttons that would open an empty menu
+  // are hidden per stream.
+  const uiConfig: OGUIConfig =
+    tokenized || iosOnlyToken ? {} : { showSubtitleButton: false, showAudioTrackButton: false };
   return (
     <Screen
       player={
         <OGPlayerView
           style={s.fill}
           source={tokenized || iosOnlyToken ? tokenSource : openSource}
+          uiConfig={uiConfig}
           autoplay
           autoFullscreenOnRotate
           {...events}
@@ -593,6 +624,9 @@ function DrmDemo() {
       <Text style={s.caption}>
         Watch for DrmKeysLoaded in the log; the token-header stream also logs
         each tokenProvider call.
+        {Platform.OS === 'android'
+          ? ' The open Widevine asset has one audio track and no subtitles, so its subtitle and audio buttons are hidden; the Axinom stream has three of each and shows both.'
+          : ''}
       </Text>
       <EventLog lines={log.lines} />
     </Screen>
@@ -804,6 +838,14 @@ function CastDemo() {
 }
 
 // ── MONETISATION · Ads (IMA) ─────────────────────────────────────────────
+// Progressive MP4: one audio track, no text tracks, no ladder — buttons that
+// would open an empty menu are hidden.
+const ADS_UI: OGUIConfig = {
+  showSubtitleButton: false,
+  showAudioTrackButton: false,
+  showQualityButton: false,
+};
+
 function AdsDemo() {
   const log = useLog();
   const events = playerEvents(log);
@@ -815,10 +857,11 @@ function AdsDemo() {
           key={scenario}
           style={s.fill}
           source={{
-            url: TOS,
+            url: TOS_CLIP,
             title: `Ads — ${AD_SCENARIOS[scenario][0]}`,
             ads: { adTagUrl: AD_SCENARIOS[scenario][1] },
           }}
+          uiConfig={ADS_UI}
           adsEnabled
           autoplay
           autoFullscreenOnRotate
@@ -834,7 +877,10 @@ function AdsDemo() {
       <Text style={s.caption}>
         Google’s public IMA sample tags. The SDK draws its own ad chrome —
         pod position, countdown, cue markers; skip and “Learn more” come from
-        IMA. The broken tag shows the ad-error path: content plays on.
+        IMA. The broken tag shows the ad-error path: content plays on. The
+        clip is a progressive MP4 with one audio track, no subtitles and no
+        quality ladder, so those three buttons are hidden (showSubtitleButton /
+        showAudioTrackButton / showQualityButton = false).
       </Text>
       <EventLog lines={log.lines} />
     </Screen>
@@ -1246,7 +1292,7 @@ const PLAYLIST_CLIPS: Array<[string, string, string | null]> = [
 
 const PLAYLIST_MODES = ['Default', 'Lead 5s', 'Custom text', 'Branded style', 'Hidden', 'With ads'];
 const PLAYLIST_EXPLAIN = [
-  'Three 14-second clips auto-advance; the \u201cUp next\u201d card counts down during the last 10 seconds — tap it to skip immediately. Changing modes reloads the playlist.',
+  'Three 14-second clips auto-advance; the \u201cUp next\u201d card counts down during the last 10 seconds — tap it to skip immediately. Changing modes reloads the playlist. The clips are progressive MP4s with one audio track, no subtitles and no ladder, so the subtitle, audio and quality buttons are hidden.',
   'upNextLeadSeconds: 5 — the card appears 5 seconds before the end instead of the default 10.',
   'upNextText: \u201c{title} starts in {seconds}s\u2026\u201d — your copy, any language; {seconds} and {title} are substituted.',
   'upNextBackgroundColor / upNextTextColor / upNextFontFamily — brand the card: accent background, serif font, dark text.',
@@ -1267,6 +1313,11 @@ function PlaylistDemo() {
   }));
 
   const config: OGUIConfig = {
+    // Progressive clips: one audio track, no text tracks, no ladder —
+    // buttons that would open an empty menu are hidden in every mode.
+    showSubtitleButton: false,
+    showAudioTrackButton: false,
+    showQualityButton: false,
     ...(mode === 1 ? { upNextLeadSeconds: 5 } : {}),
     ...(mode === 2 ? { upNextText: '{title} starts in {seconds}s\u2026' } : {}),
     ...(mode === 3
@@ -1397,7 +1448,7 @@ function AppBody() {
             <Text style={s.brand}>
               <Text style={{ color: Ink.accent }}>OG</Text>Player
             </Text>
-            <Text style={s.version}>React Native 1.1.2 · SDK 1.1.0/1.1.1</Text>
+            <Text style={s.version}>v{WRAPPER_VERSION}</Text>
           </View>
           <Text style={s.h1}>Integration demos</Text>
           <Text style={s.lede}>Every SDK capability, demonstrated end to end.</Text>
