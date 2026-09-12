@@ -31,6 +31,7 @@ import {
   type OGMediaItem,
   type OGUIConfig,
   type OGPlayerError,
+  type AnalyticsEvent,
   type AudioTrack,
   type TextTrack,
   type VideoQuality,
@@ -190,7 +191,18 @@ function playerEvents(log: ReturnType<typeof useLog>) {
     onSeekCompleted: (p: number) => log.add(`onSeekCompleted: ${Math.round(p / 1000)}s`),
     onLiveEdgeChanged: (a: boolean) => log.add(`onLiveEdgeChanged: ${a}`),
     onError: (e: OGPlayerError) => log.add(`onError: ${e.code} ${e.message}`),
-    onAnalyticsEvent: (e: { type: string }) => log.add(`analytics: ${e.type}`),
+    onAnalyticsEvent: (e: AnalyticsEvent) => {
+      // Values, not just names — the native SDKs' shape: Type(field=value, …).
+      const skip = ['type', 'sessionId', 'assetUrl', 'description'];
+      const fmt = (v: unknown) =>
+        v && typeof v === 'object' && 'code' in v
+          ? `${(v as { code: unknown }).code} ${(v as { message?: string }).message ?? ''}`.trim()
+          : typeof v === 'object' ? JSON.stringify(v) : String(v);
+      const parts = Object.entries(e as unknown as Record<string, unknown>)
+        .filter(([k, v]) => !skip.includes(k) && v !== undefined && v !== null)
+        .map(([k, v]) => `${k}=${fmt(v)}`);
+      log.add(`analytics: ${e.type}${parts.length ? `(${parts.join(', ')})` : ''}`);
+    },
     onAdEvent: (e: { type: string }) => log.add(`ad: ${e.type}`),
   };
 }
